@@ -1,0 +1,13 @@
+Hi! Please run the toy experiment to validate our hierarchical monitoring approach:
+
+python toy_experiment.py
+
+This compares:
+1. Our hierarchical training (end-to-end with soft gates)
+2. Baseline probe (trained standalone) + hierarchical deployment
+
+Expected: Hierarchical training shows better recall at same budget.
+
+See CLAUDE_HANDOFF.md for full context. The experiment should take ~2 minutes and output results + plots.
+
+Key question: Does hierarchical training beat baseline approach for recall on harmful outputs?
