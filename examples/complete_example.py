@@ -15,15 +15,13 @@ from torch.utils.data import DataLoader
 import sys
 import os
 
-# Add src to path
-sys.path.append(os.path.join(os.path.dirname(__file__), '..', 'src'))
-
-from models.hierarchical import HierarchicalMonitor
-from models.probe import LinearProbe
-from training.trainer import HierarchicalTrainer, BaselineTrainer
-from training.loss import HierarchicalLoss, BaselineLoss
-from data.datasets import SyntheticDataset, create_data_loaders, split_dataset
-from evaluation.metrics import HierarchicalMetrics, DeploymentMetrics
+# Import from the installed package
+from src.models.hierarchical import HierarchicalMonitor
+from src.models.probe import LinearProbe
+from src.training.trainer import HierarchicalTrainer, BaselineTrainer
+from src.training.loss import HierarchicalLoss, BaselineLoss
+from src.data.datasets import SyntheticDataset, create_data_loaders, split_dataset
+from src.evaluation.metrics import HierarchicalMetrics, DeploymentMetrics
 
 
 def create_synthetic_data(n_samples=1000, n_features=128, harmful_ratio=0.1, seed=42):
@@ -119,12 +117,10 @@ def evaluate_model(model, test_loader, device="cpu"):
                 monitor_scores = monitor_scores.to(device)
             
             # Forward pass
-            if hasattr(model, 'forward') and 'p_audit' in model(features, monitor_scores, training=True):
-                # Hierarchical model
+            if hasattr(model, 'deploy'):  # Hierarchical model
                 outputs = model(features, monitor_scores, training=True)
                 all_outputs.append(outputs)
-            else:
-                # Baseline model
+            else:  # Baseline model
                 probe_scores = model(features).squeeze(-1)
                 outputs = {'p_audit': torch.sigmoid(probe_scores)}
                 all_outputs.append(outputs)
@@ -136,7 +132,9 @@ def evaluate_model(model, test_loader, device="cpu"):
     outputs = {
         'p_audit': torch.cat([o['p_audit'] for o in all_outputs]),
         'p_gate': torch.cat([o.get('p_gate', torch.zeros_like(o['p_audit'])) for o in all_outputs]),
-        'expected_total_cost': torch.cat([o.get('expected_total_cost', torch.zeros_like(o['p_audit'])) for o in all_outputs])
+        'expected_total_cost': torch.cat([o.get('expected_total_cost', torch.zeros_like(o['p_audit'])) for o in all_outputs]),
+        'p1': torch.cat([o.get('p1', torch.zeros_like(o['p_audit'])) for o in all_outputs]),
+        'p2': torch.cat([o.get('p2', torch.zeros_like(o['p_audit'])) for o in all_outputs])
     }
     
     # Compute metrics

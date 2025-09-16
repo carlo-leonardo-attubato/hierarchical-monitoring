@@ -194,7 +194,7 @@ class HierarchicalMonitor(nn.Module):
             'total_costs': total_cost,
             'immediate_audits': immediate_audit_mask.sum().item(),
             'escalations': escalation_mask.sum().item(),
-            'final_audits': (audit_decisions & ~immediate_audit_mask).sum().item()
+            'final_audits': ((audit_decisions == 1) & (immediate_audit_mask == 0)).sum().item()
         }
     
     def get_parameters(self) -> Dict[str, torch.Tensor]:
