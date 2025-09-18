@@ -41,16 +41,48 @@ class HardHierarchicalMonitor(nn.Module):
         self.beta_3 = nn.Parameter(torch.tensor(2.0))   # ensemble slope
         self.a = nn.Parameter(torch.tensor(3.0))        # ensemble threshold (start high for low audit)
 
-    def forward(self, features, monitor_scores):
-        # Get probe scores
-        m1 = self.probe(features).squeeze()
-        m2 = monitor_scores
+        # Normalization statistics (buffers, not parameters)
+        self.register_buffer('probe_mean', torch.tensor(0.0))
+        self.register_buffer('probe_std', torch.tensor(1.0))
+        self.register_buffer('monitor_mean', torch.tensor(0.0))
+        self.register_buffer('monitor_std', torch.tensor(1.0))
+        self.normalization_fitted = False
 
-        # Gate probabilities
+    def fit_normalization(self, train_features, train_monitor_scores):
+        """Fit normalization statistics on training data (standard ML practice)."""
+        with torch.no_grad():
+            # Get probe scores on training data
+            probe_scores = self.probe(train_features).squeeze()
+
+            # Compute normalization statistics (fit once, use throughout training)
+            self.probe_mean = probe_scores.mean()
+            self.probe_std = probe_scores.std() + 1e-8
+            self.monitor_mean = train_monitor_scores.mean()
+            self.monitor_std = train_monitor_scores.std() + 1e-8
+
+            self.normalization_fitted = True
+
+
+    def forward(self, features, monitor_scores):
+        # Get raw probe logits (for BCE loss)
+        probe_logits = self.probe(features).squeeze()
+
+        # Get normalized scores (for gating decisions)
+        if self.normalization_fitted:
+            probe_scores_normalized = (probe_logits - self.probe_mean) / self.probe_std
+            monitor_scores_normalized = (monitor_scores - self.monitor_mean) / self.monitor_std
+        else:
+            probe_scores_normalized = probe_logits
+            monitor_scores_normalized = monitor_scores
+
+        m1 = probe_scores_normalized
+        m2 = monitor_scores_normalized
+
+        # Gate probabilities (now acting on normalized scores)
         p1 = torch.sigmoid(self.beta_u * (m1 - self.u))  # P(immediate audit)
         p2 = torch.sigmoid(self.beta_l * (m1 - self.l))  # P(monitor call)
 
-        # Ensemble score and probability
+        # Ensemble score and probability (using normalized scores)
         m3 = self.alpha_1 * m1 + self.alpha_2 * m2
         p3 = torch.sigmoid(self.beta_3 * (m3 - self.a))  # P(audit | monitor called)
 
@@ -59,8 +91,9 @@ class HardHierarchicalMonitor(nn.Module):
         p_audit = p1 + p_gate * p3  # P(total audit)
 
         return {
-            'probe_scores': m1,
-            'monitor_scores': m2,
+            'probe_scores': probe_logits,  # raw logits for BCE loss
+            'monitor_scores': monitor_scores_normalized,  # normalized scores
+            'probe_scores_normalized': probe_scores_normalized,  # normalized scores for gating
             'ensemble_scores': m3,
             'p_immediate': p1,
             'p_gate': p_gate,
@@ -77,10 +110,13 @@ class HardHierarchicalMonitor(nn.Module):
 def generate_hard_dataset(n_samples=800, n_features=32, harmful_ratio=0.2,
                          signal_strength=0.3, seed=42):
     """
-    Generate dataset with three categories:
-    1. 5% examples: probe and monitor do poorly (very weak signal)
-    2. 20% examples: probe has okay signal, monitor does well
-    3. 75% examples: activations are informative (strong probe signal)
+    Generate dataset according to new specification:
+    - y = +1 for misaligned (harmful) and -1 for aligned (benign)
+    - latent suspiciousness L = y + N(0, 0.8)
+    - probe suspiciousness p = L + N(0, 1.2)
+    - monitor suspiciousness m = L + N(0, 0.8)
+    - monitor score is m
+    - feature vector = random unit vector + m * v (where v is fixed random unit vector)
     """
     torch.manual_seed(seed)
     np.random.seed(seed)
@@ -88,86 +124,45 @@ def generate_hard_dataset(n_samples=800, n_features=32, harmful_ratio=0.2,
     n_harmful = int(n_samples * harmful_ratio)
     n_benign = n_samples - n_harmful
 
-    # Generate base features
-    features = torch.randn(n_samples, n_features) * 0.5
+    # Generate labels: +1 for misaligned/harmful, -1 for aligned/benign
+    y = -torch.ones(n_samples)  # Start with -1 for benign
+    y[:n_harmful] = 1  # First n_harmful samples are misaligned/harmful
+
+    # Convert to 0/1 labels for compatibility with existing code
     labels = torch.zeros(n_samples)
-    labels[:n_harmful] = 1
+    labels[:n_harmful] = 1  # 1 for harmful, 0 for benign
 
-    # Create harmful pattern for informative examples
-    harmful_pattern = torch.randn(n_features)
-    harmful_pattern = harmful_pattern / torch.norm(harmful_pattern)
+    # Generate latent suspiciousness: L = y + N(0, 0.8)
+    L = y + torch.randn(n_samples) * 0.8
 
-    # Category assignments for ALL samples (harmful + benign)
-    n_very_weak = int(n_samples * 0.05)      # 5% very weak signal
-    n_okay_signal = int(n_samples * 0.20)    # 20% okay signal
-    n_informative = n_samples - n_very_weak - n_okay_signal  # 75% informative
+    # Generate probe suspiciousness: p = L + N(0, 1.2)
+    probe_suspiciousness = L + torch.randn(n_samples) * 1.2
 
-    # Shuffle category assignments across all samples
-    category_indices = torch.randperm(n_samples)
-    very_weak_indices = category_indices[:n_very_weak]
-    okay_signal_indices = category_indices[n_very_weak:n_very_weak + n_okay_signal]
-    informative_indices = category_indices[n_very_weak + n_okay_signal:]
+    # Generate monitor suspiciousness: m = L + N(0, 0.8)
+    monitor_suspiciousness = L + torch.randn(n_samples) * 0.8
 
-    # Track which category each sample belongs to
-    sample_categories = torch.zeros(n_samples, dtype=torch.long)  # 0=very_weak, 1=okay, 2=informative
-    sample_categories[very_weak_indices] = 0
-    sample_categories[okay_signal_indices] = 1
-    sample_categories[informative_indices] = 2
+    # Monitor scores are just the monitor suspiciousness
+    monitor_scores = monitor_suspiciousness
 
-    # Add signals based on category and label
+    # Generate fixed random unit vector v (same across all samples)
+    v = torch.randn(n_features)
+    v = v / torch.norm(v)  # normalize to unit vector
+
+    # Generate feature vectors: random unit vector + m * v
+    features = torch.zeros(n_samples, n_features)
     for i in range(n_samples):
-        if labels[i] == 1:  # Harmful examples
-            if sample_categories[i] == 0:  # Very weak signal
-                # Almost no signal - just noise
-                features[i] += torch.randn(n_features) * 0.1
-            elif sample_categories[i] == 1:  # Okay signal
-                # Moderate signal strength
-                noise_scale = np.random.uniform(0.5, 1.0)
-                features[i] += signal_strength * 0.6 * noise_scale * harmful_pattern
-                # Add some noise
-                noise_dims = torch.randperm(n_features)[:n_features//3]
-                features[i, noise_dims] += torch.randn(len(noise_dims)) * 0.3
-            else:  # Informative - much stronger signal
-                # Very strong signal for informative examples
-                noise_scale = np.random.uniform(1.0, 1.5)
-                features[i] += signal_strength * 2.0 * noise_scale * harmful_pattern
-                # Minimal noise
-                noise_dims = torch.randperm(n_features)[:n_features//8]
-                features[i, noise_dims] += torch.randn(len(noise_dims)) * 0.1
+        # Random unit vector for each sample
+        random_unit = torch.randn(n_features)
+        random_unit = random_unit / torch.norm(random_unit)
+
+        # Feature vector = random unit vector + m * v
+        features[i] = random_unit + monitor_scores[i] * v
 
     # Shuffle the dataset
     indices = torch.randperm(n_samples)
     features = features[indices]
     labels = labels[indices]
-    sample_categories = sample_categories[indices]
-
-    # Generate monitor scores based on categories
-    monitor_scores = torch.randn(n_samples) * 0.3
-    for i in range(n_samples):
-        if labels[i] == 1:  # Harmful
-            if sample_categories[i] == 0:  # Very weak - monitor also struggles
-                # Monitor barely better than random
-                monitor_scores[i] += 0.4 + torch.randn(1).item() * 0.4
-            elif sample_categories[i] == 1:  # Okay signal - monitor does well
-                # Monitor performs well
-                monitor_scores[i] += 1.6 + torch.randn(1).item() * 0.3
-            else:  # Informative - monitor does well
-                # Monitor performs very well
-                monitor_scores[i] += 1.4 + torch.randn(1).item() * 0.3
-        else:  # Benign
-            # Monitor false positive rates vary by category
-            if sample_categories[i] == 0:  # Very weak
-                # Higher false positive rate when signal is weak
-                if np.random.random() < 0.25:
-                    monitor_scores[i] += 0.6 + torch.randn(1).item() * 0.3
-            elif sample_categories[i] == 1:  # Okay signal
-                # Moderate false positive rate
-                if np.random.random() < 0.15:
-                    monitor_scores[i] += 0.7 + torch.randn(1).item() * 0.3
-            else:  # Informative
-                # Low false positive rate
-                if np.random.random() < 0.10:
-                    monitor_scores[i] += 0.5 + torch.randn(1).item() * 0.3
+    monitor_scores = monitor_scores[indices]
 
     return features, labels, monitor_scores
 

@@ -106,9 +106,12 @@ class CostLoss(nn.Module):
         benign_mask = (labels == 0)
         if not benign_mask.any():
             return torch.tensor(0.0, device=expected_costs.device)
-        
+
         benign_costs = expected_costs[benign_mask]
-        cost_ratio = benign_costs.mean() / budget  # r = C/B
+        n_benign = benign_mask.sum().item()
+        per_benign_budget = budget  # budget is already per-benign
+        total_budget = n_benign * per_benign_budget
+        cost_ratio = benign_costs.sum() / total_budget  # r = total_cost / (n_benign * budget_per_benign)
         
         if self.penalty_type == "quadratic":
             # Quadratic: s * (r - 1)^2
