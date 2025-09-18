@@ -135,11 +135,11 @@ def generate_hard_dataset(n_samples=800, n_features=32, harmful_ratio=0.2,
     # Generate larger shared noise component for higher correlation
     shared_noise = torch.randn(n_samples) * 0.8
 
-    # Generate probe suspiciousness: p = signal + shared noise + smaller independent noise
-    probe_suspiciousness = 1.0 * y + shared_noise + torch.randn(n_samples) * 1.0
+    # Generate probe suspiciousness: p = signal + shared noise + larger independent noise (worse performance)
+    probe_suspiciousness = 1.0 * y + shared_noise + torch.randn(n_samples) * 1.5
 
-    # Generate monitor suspiciousness: m = signal + shared noise + smaller independent noise
-    monitor_suspiciousness = 1.0 * y + shared_noise + torch.randn(n_samples) * 0.5
+    # Generate monitor suspiciousness: m = signal + shared noise + smaller independent noise (better performance)
+    monitor_suspiciousness = 1.0 * y + shared_noise + torch.randn(n_samples) * 0.3
 
     # Monitor scores are just the monitor suspiciousness
     monitor_scores = monitor_suspiciousness

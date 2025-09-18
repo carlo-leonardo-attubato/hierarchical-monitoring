@@ -23,7 +23,8 @@ sys.path.append(os.path.join(os.path.dirname(__file__), 'src', 'training'))
 import loss
 from loss import HierarchicalLoss, RecallLoss, CostLoss
 from experiment_utils import ExperimentLogger
-from training_comparison import HardHierarchicalMonitor, generate_hard_dataset
+from training_comparison import HardHierarchicalMonitor
+from datasets.toy_datasets import generate_hard_dataset, save_dataset
 
 
 def get_recall_loss_config(recall_type):
@@ -665,7 +666,7 @@ def plot_modular_curriculum_results(histories, loss_combinations, config,
 
     # Create 11 columns (4 losses + enforced budget + 3 joint outputs + 3 baseline outputs) x n_combinations rows layout
     n_cols = 11
-    fig, axes = plt.subplots(n_combinations, n_cols, figsize=(n_cols * 1.5, n_combinations * 1.5))
+    fig, axes = plt.subplots(n_combinations, n_cols, figsize=(n_cols * 2.2, n_combinations * 2.2), dpi=300)
 
     # Handle single combination case
     if n_combinations == 1:
@@ -810,14 +811,14 @@ def plot_modular_curriculum_results(histories, loss_combinations, config,
         # Column 6: P(audit) contour plot with scatter
         ax = axes[i, 5]
         im1 = ax.contourf(M2, M1, p_audit, levels=20, cmap='Blues')
-        ax.contour(M2, M1, p_audit, levels=[0.5, 0.8, 0.95], colors='white', linewidths=1, alpha=0.5)
+        ax.contour(M2, M1, p_audit, levels=[0.5, 0.8, 0.95], colors='white', linewidths=0.5, alpha=0.5)
 
         # Add scatter plot of test data (use probe scores calculated above)
         harmful_mask = y_test == 1
         benign_mask = y_test == 0
         # Use raw monitor scores for consistency across all plots
-        ax.scatter(m_test[benign_mask], probe_scores_norm[benign_mask], c='lightblue', s=3, alpha=0.6, label='Benign')
-        ax.scatter(m_test[harmful_mask], probe_scores_norm[harmful_mask], c='red', s=3, alpha=0.8, label='Harmful')
+        ax.scatter(m_test[benign_mask], probe_scores_norm[benign_mask], c='lightblue', s=0.5, alpha=0.6, label='Benign')
+        ax.scatter(m_test[harmful_mask], probe_scores_norm[harmful_mask], c='red', s=0.5, alpha=0.8, label='Harmful')
 
         ax.set_xlabel('Monitor Score', fontsize=8)
         ax.set_ylabel('Probe Score', fontsize=8)
@@ -829,11 +830,11 @@ def plot_modular_curriculum_results(histories, loss_combinations, config,
         # Column 7: P(gate) contour plot with scatter
         ax = axes[i, 6]
         im2 = ax.contourf(M2, M1, p_gate, levels=20, cmap='Greens')
-        ax.contour(M2, M1, p_gate, levels=[0.25, 0.5, 0.75], colors='white', linewidths=1, alpha=0.5)
+        ax.contour(M2, M1, p_gate, levels=[0.25, 0.5, 0.75], colors='white', linewidths=0.5, alpha=0.5)
 
         # Add scatter plot of test data
-        ax.scatter(m_test[benign_mask], probe_scores_norm[benign_mask], c='lightblue', s=3, alpha=0.6, label='Benign')
-        ax.scatter(m_test[harmful_mask], probe_scores_norm[harmful_mask], c='red', s=3, alpha=0.8, label='Harmful')
+        ax.scatter(m_test[benign_mask], probe_scores_norm[benign_mask], c='lightblue', s=0.5, alpha=0.6, label='Benign')
+        ax.scatter(m_test[harmful_mask], probe_scores_norm[harmful_mask], c='red', s=0.5, alpha=0.8, label='Harmful')
 
         ax.set_xlabel('Monitor Score', fontsize=8)
         ax.set_ylabel('Probe Score', fontsize=8)
@@ -847,11 +848,11 @@ def plot_modular_curriculum_results(histories, loss_combinations, config,
         max_cost = max(config["c_monitor"] + config["c_audit"], 25)
         im3 = ax.contourf(M2, M1, cost, levels=20, cmap='Reds', vmin=0, vmax=max_cost)
         # Contour at budget value
-        ax.contour(M2, M1, cost, levels=[config["budget"]], colors='blue', linewidths=3, linestyles='--')
+        ax.contour(M2, M1, cost, levels=[config["budget"]], colors='blue', linewidths=0.5, linestyles='--')
 
         # Add scatter plot of test data
-        ax.scatter(m_test[benign_mask], probe_scores_norm[benign_mask], c='lightblue', s=3, alpha=0.6, label='Benign')
-        ax.scatter(m_test[harmful_mask], probe_scores_norm[harmful_mask], c='red', s=3, alpha=0.8, label='Harmful')
+        ax.scatter(m_test[benign_mask], probe_scores_norm[benign_mask], c='lightblue', s=0.5, alpha=0.6, label='Benign')
+        ax.scatter(m_test[harmful_mask], probe_scores_norm[harmful_mask], c='red', s=0.5, alpha=0.8, label='Harmful')
 
         ax.set_xlabel('Monitor Score', fontsize=8)
         ax.set_ylabel('Probe Score', fontsize=8)
@@ -905,11 +906,11 @@ def plot_modular_curriculum_results(histories, loss_combinations, config,
         # Column 8: Baseline P(audit)
         ax = axes[i, 8]
         im1_baseline = ax.contourf(M2_baseline, M1_baseline, p_audit_baseline, levels=20, cmap='Blues')
-        ax.contour(M2_baseline, M1_baseline, p_audit_baseline, levels=[0.5, 0.8, 0.95], colors='white', linewidths=1, alpha=0.5)
+        ax.contour(M2_baseline, M1_baseline, p_audit_baseline, levels=[0.5, 0.8, 0.95], colors='white', linewidths=0.5, alpha=0.5)
 
         # Add scatter plot of test data with baseline probe scores
-        ax.scatter(m_test[benign_mask], baseline_probe_scores_norm[benign_mask], c='lightblue', s=3, alpha=0.6, label='Benign')
-        ax.scatter(m_test[harmful_mask], baseline_probe_scores_norm[harmful_mask], c='red', s=3, alpha=0.8, label='Harmful')
+        ax.scatter(m_test[benign_mask], baseline_probe_scores_norm[benign_mask], c='lightblue', s=0.5, alpha=0.6, label='Benign')
+        ax.scatter(m_test[harmful_mask], baseline_probe_scores_norm[harmful_mask], c='red', s=0.5, alpha=0.8, label='Harmful')
 
         ax.set_xlabel('Monitor Score', fontsize=8)
         ax.set_ylabel('Probe Score', fontsize=8)
@@ -921,11 +922,11 @@ def plot_modular_curriculum_results(histories, loss_combinations, config,
         # Column 9: Baseline P(gate)
         ax = axes[i, 9]
         im2_baseline = ax.contourf(M2_baseline, M1_baseline, p_gate_baseline, levels=20, cmap='Greens')
-        ax.contour(M2_baseline, M1_baseline, p_gate_baseline, levels=[0.25, 0.5, 0.75], colors='white', linewidths=1, alpha=0.5)
+        ax.contour(M2_baseline, M1_baseline, p_gate_baseline, levels=[0.25, 0.5, 0.75], colors='white', linewidths=0.5, alpha=0.5)
 
         # Add scatter plot of test data with baseline probe scores
-        ax.scatter(m_test[benign_mask], baseline_probe_scores_norm[benign_mask], c='lightblue', s=3, alpha=0.6, label='Benign')
-        ax.scatter(m_test[harmful_mask], baseline_probe_scores_norm[harmful_mask], c='red', s=3, alpha=0.8, label='Harmful')
+        ax.scatter(m_test[benign_mask], baseline_probe_scores_norm[benign_mask], c='lightblue', s=0.5, alpha=0.6, label='Benign')
+        ax.scatter(m_test[harmful_mask], baseline_probe_scores_norm[harmful_mask], c='red', s=0.5, alpha=0.8, label='Harmful')
 
         ax.set_xlabel('Monitor Score', fontsize=8)
         ax.set_ylabel('Probe Score', fontsize=8)
@@ -937,11 +938,11 @@ def plot_modular_curriculum_results(histories, loss_combinations, config,
         # Column 10: Baseline Expected Cost
         ax = axes[i, 10]
         im3_baseline = ax.contourf(M2_baseline, M1_baseline, cost_baseline, levels=20, cmap='Reds', vmin=0, vmax=max_cost)
-        ax.contour(M2_baseline, M1_baseline, cost_baseline, levels=[config["budget"]], colors='blue', linewidths=3, linestyles='--')
+        ax.contour(M2_baseline, M1_baseline, cost_baseline, levels=[config["budget"]], colors='blue', linewidths=0.5, linestyles='--')
 
         # Add scatter plot of test data with baseline probe scores
-        ax.scatter(m_test[benign_mask], baseline_probe_scores_norm[benign_mask], c='lightblue', s=3, alpha=0.6, label='Benign')
-        ax.scatter(m_test[harmful_mask], baseline_probe_scores_norm[harmful_mask], c='red', s=3, alpha=0.8, label='Harmful')
+        ax.scatter(m_test[benign_mask], baseline_probe_scores_norm[benign_mask], c='lightblue', s=0.5, alpha=0.6, label='Benign')
+        ax.scatter(m_test[harmful_mask], baseline_probe_scores_norm[harmful_mask], c='red', s=0.5, alpha=0.8, label='Harmful')
 
         ax.set_xlabel('Monitor Score', fontsize=8)
         ax.set_ylabel('Probe Score', fontsize=8)
@@ -988,7 +989,7 @@ def plot_modular_curriculum_results(histories, loss_combinations, config,
 
     filename = f"modular_curriculum_{timestamp}.png"
     filepath = os.path.join(plots_dir, filename)
-    plt.savefig(filepath, dpi=150, bbox_inches='tight')  # bbox_inches='tight' trims whitespace
+    plt.savefig(filepath, dpi=300, bbox_inches='tight', facecolor='white')  # High DPI for crisp output
     print(f"\nPlot saved as {filepath}")
 
     plt.show()
@@ -1036,6 +1037,15 @@ def run_modular_curriculum_comparison():
         signal_strength=config["signal_strength"],
         seed=config["seed"]
     )
+
+    # Save dataset for reproducibility
+    dataset_config = {
+        "experiment_type": "modular_curriculum",
+        "loss_combinations": loss_combinations,
+        **config
+    }
+    save_dataset(features, labels, monitor_scores,
+                 dataset_name="modular_curriculum", config=dataset_config)
 
     # Split data
     X_train, X_test, y_train, y_test, m_train, m_test = train_test_split(
