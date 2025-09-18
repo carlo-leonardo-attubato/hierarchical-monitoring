@@ -665,7 +665,7 @@ def plot_modular_curriculum_results(histories, loss_combinations, config,
 
     # Create 11 columns (4 losses + enforced budget + 3 joint outputs + 3 baseline outputs) x n_combinations rows layout
     n_cols = 11
-    fig, axes = plt.subplots(n_combinations, n_cols, figsize=(16, n_combinations * 4))
+    fig, axes = plt.subplots(n_combinations, n_cols, figsize=(n_cols * 1.5, n_combinations * 1.5))
 
     # Handle single combination case
     if n_combinations == 1:
@@ -825,7 +825,6 @@ def plot_modular_curriculum_results(histories, loss_combinations, config,
         ax.grid(True, alpha=0.3)
         ax.set_xlim(x_limits)
         ax.set_ylim(y_limits)
-        ax.legend(fontsize=6)
 
         # Column 7: P(gate) contour plot with scatter
         ax = axes[i, 6]
@@ -842,7 +841,6 @@ def plot_modular_curriculum_results(histories, loss_combinations, config,
         ax.grid(True, alpha=0.3)
         ax.set_xlim(x_limits)
         ax.set_ylim(y_limits)
-        ax.legend(fontsize=6)
 
         # Column 8: Expected Cost contour plot with scatter
         ax = axes[i, 7]
@@ -861,7 +859,6 @@ def plot_modular_curriculum_results(histories, loss_combinations, config,
         ax.grid(True, alpha=0.3)
         ax.set_xlim(x_limits)
         ax.set_ylim(y_limits)
-        ax.legend(fontsize=6)
 
         # Columns 8-10: Baseline method decision boundaries
         # Extract baseline model parameters
@@ -920,7 +917,6 @@ def plot_modular_curriculum_results(histories, loss_combinations, config,
         ax.grid(True, alpha=0.3)
         ax.set_xlim(x_limits_baseline)
         ax.set_ylim(y_limits_baseline)
-        ax.legend(fontsize=6)
 
         # Column 9: Baseline P(gate)
         ax = axes[i, 9]
@@ -937,7 +933,6 @@ def plot_modular_curriculum_results(histories, loss_combinations, config,
         ax.grid(True, alpha=0.3)
         ax.set_xlim(x_limits_baseline)
         ax.set_ylim(y_limits_baseline)
-        ax.legend(fontsize=6)
 
         # Column 10: Baseline Expected Cost
         ax = axes[i, 10]
@@ -954,27 +949,17 @@ def plot_modular_curriculum_results(histories, loss_combinations, config,
         ax.grid(True, alpha=0.3)
         ax.set_xlim(x_limits_baseline)
         ax.set_ylim(y_limits_baseline)
-        ax.legend(fontsize=6)
 
-        # Add phase boundaries and labels for all plots in this row
-        for j in range(11):
+        # Add phase boundaries and labels only for loss plots (columns 0-4)
+        for j in range(5):  # Only loss plots need phase boundaries
             ax = axes[i, j]
             ax.axvline(x=n_epochs, color='gray', linestyle='--', alpha=0.5)
             ax.axvline(x=2*n_epochs, color='gray', linestyle='--', alpha=0.5)
 
             # Only add x-label to bottom row for loss plots (columns 0-4)
-            if i == n_combinations - 1 and j <= 4:
+            if i == n_combinations - 1:
                 ax.set_xlabel('Epoch')
 
-            # Add phase labels only on bottom row
-            if i == n_combinations - 1:
-                phase_y = -0.15
-                ax.text(n_epochs/2, phase_y, 'Phase 1', transform=ax.transAxes,
-                       ha='center', fontsize=8, alpha=0.7)
-                ax.text((n_epochs + 2*n_epochs)/2, phase_y, 'Phase 2', transform=ax.transAxes,
-                       ha='center', fontsize=8, alpha=0.7)
-                ax.text((2*n_epochs + 3*n_epochs)/2, phase_y, 'Phase 3', transform=ax.transAxes,
-                       ha='center', fontsize=8, alpha=0.7)
 
         # Remove row labels as requested
 
@@ -986,9 +971,9 @@ def plot_modular_curriculum_results(histories, loss_combinations, config,
         Line2D([0], [0], color='red', linestyle='-', linewidth=0.8, marker='o', markersize=3, label='Baseline (test)'),
         Line2D([0], [0], color='red', linestyle=':', linewidth=0.8, marker='s', markersize=1.5, alpha=0.7, label='Baseline (train)'),
     ]
-    fig.legend(handles=legend_elements, loc='lower center', ncol=4, fontsize=10, bbox_to_anchor=(0.5, -0.02))
+    fig.legend(handles=legend_elements, loc='lower center', ncol=4, fontsize=9, bbox_to_anchor=(0.5, -0.01))
 
-    plt.subplots_adjust(hspace=0.4, wspace=0.3, left=0.1, right=0.95, top=0.95, bottom=0.1)
+    plt.subplots_adjust(hspace=0.4, wspace=0.3, left=0.05, right=0.98, top=0.92, bottom=0.08)
 
     # Save and show
     import os

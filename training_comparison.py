@@ -132,14 +132,14 @@ def generate_hard_dataset(n_samples=800, n_features=32, harmful_ratio=0.2,
     labels = torch.zeros(n_samples)
     labels[:n_harmful] = 1  # 1 for harmful, 0 for benign
 
-    # Generate latent suspiciousness: L = y + N(0, 0.8)
-    L = y + torch.randn(n_samples) * 0.8
+    # Generate larger shared noise component for higher correlation
+    shared_noise = torch.randn(n_samples) * 0.8
 
-    # Generate probe suspiciousness: p = L + N(0, 1.2)
-    probe_suspiciousness = L + torch.randn(n_samples) * 1.2
+    # Generate probe suspiciousness: p = signal + shared noise + smaller independent noise
+    probe_suspiciousness = 1.0 * y + shared_noise + torch.randn(n_samples) * 1.0
 
-    # Generate monitor suspiciousness: m = L + N(0, 0.8)
-    monitor_suspiciousness = L + torch.randn(n_samples) * 0.8
+    # Generate monitor suspiciousness: m = signal + shared noise + smaller independent noise
+    monitor_suspiciousness = 1.0 * y + shared_noise + torch.randn(n_samples) * 0.5
 
     # Monitor scores are just the monitor suspiciousness
     monitor_scores = monitor_suspiciousness
@@ -155,8 +155,8 @@ def generate_hard_dataset(n_samples=800, n_features=32, harmful_ratio=0.2,
         random_unit = torch.randn(n_features)
         random_unit = random_unit / torch.norm(random_unit)
 
-        # Feature vector = random unit vector + m * v
-        features[i] = random_unit + monitor_scores[i] * v
+        # Feature vector = random unit vector + p * v (using noisy probe scores)
+        features[i] = random_unit + probe_suspiciousness[i] * v
 
     # Shuffle the dataset
     indices = torch.randperm(n_samples)
